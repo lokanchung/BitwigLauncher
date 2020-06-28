@@ -1,9 +1,15 @@
 [package]
-name = "BitwigLauncher"
+name = "bitwig_launcher"
 version = "0.1.0"
-authors = ["ulongcha <blings@naver.com>"]
+authors = ["lokanchung <lokanchung@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+winapi = {version = "0.3", features = ["winuser"]}
+serde = {version ="1.0", features = ["derive"]}
+serde_yaml = "0.8"
+serde_bytes = "*"
+raw-string = "*"
+winreg = "0.7"
