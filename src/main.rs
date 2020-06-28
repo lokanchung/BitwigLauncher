@@ -47,10 +47,10 @@ fn read_config(config_path: &Path) -> Result<Config, AnyError> {
     Ok(serde_yaml::from_str(&config_str)?)
 }
 
-fn main() {
+fn main() -> Result<(), AnyError> {
     let config_path = Path::new("Software\\Bitwiglauncher");
 
-    // load config and run
+    // load config
     let mut reset_count = 0;
     let mut config: Config;
     loop {
@@ -58,20 +58,14 @@ fn main() {
             Ok(c) => {
                 config = c;
             }
-            Err(_) => {
-                if reset_count < 1 {
+            Err(e) => {
+                if reset_count < 1 { // reset only once
                     let default_config = Config::new();
-                    println!("hello");
-                    match write_config(&default_config, config_path) {
-                        Err(_) => {
-                            return;
-                        }
-                        _ => ()
-                    }
+                    write_config(&default_config, config_path)?;
                     reset_count += 1;
                     continue;
                 } else {
-                    return;
+                    return Err(e);
                 }
             }
         }
@@ -79,7 +73,8 @@ fn main() {
     }
 
     run(&mut config);
-    write_config(&config, &config_path);
+    write_config(&config, &config_path)?;
+    Ok(())
 }
 
 fn run(config: &mut Config) {
@@ -108,7 +103,7 @@ fn run(config: &mut Config) {
 
         }
     } else {
-        // TODO: show couldn't find bitwig directory message
+        // TODO: show folder picker
     }
 
     // detect difference
