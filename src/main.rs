@@ -53,7 +53,7 @@ fn read_config(config_path: &Path) -> Result<Config, AnyError> {
 
 // ---- APP ----
 #[macro_use] extern crate native_windows_gui as nwg;
-use nwg::{Event, EventArgs, Ui, simple_message, fatal_message, dispatch_events};
+use nwg::{Event, Ui, simple_message, fatal_message, dispatch_events};
 #[derive(Debug, Clone, Hash)]
 pub enum Id {
     // Controls
@@ -68,6 +68,7 @@ pub enum Id {
 
     // Events
     Launch,
+    ChangeDir,
 
     // Resource,
     Font,
@@ -161,11 +162,20 @@ nwg_template!(
             match version_list.get_selected_index() {
                 Some(idx) => {
                     let version = &version_list.collection()[idx];
-                    launch_bitwig(path, version);
-                    nwg::exit();
+                    match launch_bitwig(path, version) {
+                        Ok(_) => {
+                            nwg::exit();
+                        }
+                        Err(_) => ()
+                    }
                 }
                 None => ()
             }
+        }),
+        (Id::ChangeDirButton, Id::ChangeDir, Event::Click, |ui,_,_,_| {
+            change_dir(ui);
+            let versions = get_versions(&nwg_get!(ui; [(Id::Path, String)]));
+            update_version_list(ui, versions);
         })
     ];
     resources: [
@@ -236,10 +246,38 @@ fn change_dir(app: &Ui<Id>) -> Option<String> {
     ]);
 
     if dialog.run() {
-        Some(dialog.get_selected_item().unwrap())
+        let new_path = dialog.get_selected_item().unwrap();
+        set_path(app, &new_path);
+        Some(new_path)
     } else {
         None
     }
+}
+
+fn set_path(app: &Ui<Id>, path:&str) {
+    // update ui value (needs scoping to release reference)
+    let mut ui_path = nwg_get_mut!(app; [(Id::Path, String)]);
+    **ui_path = path.to_owned();
+    // setup lables
+    let dir_label = nwg_get_mut!(app; [
+        (Id::BitwigDirLabel, nwg::Label)
+    ]);
+
+    dir_label.set_text(&path);
+}
+
+fn update_version_list<T>(app: &Ui<Id>, versions: T) 
+    where T: IntoIterator,
+        T::Item: AsRef<str> {
+    let mut version_list = nwg_get_mut!(app; [
+        (Id::VersionList, nwg::ListBox<String>)
+    ]);
+
+    let version_collection = version_list.collection_mut();
+    version_collection.clear();
+    versions.into_iter().for_each(|x| version_collection.push(String::from(x.as_ref())));
+    version_collection.sort();
+    version_list.sync();
 }
 
 fn launch_bitwig(path:&str, version:&str) -> Result<(), AnyError> {
@@ -295,35 +333,26 @@ fn run(config: &mut Config) {
             _ => ()
         }
     }
-    
-    // setup lables
-    let dir_label = nwg_get_mut!(app; [
-        (Id::BitwigDirLabel, nwg::Label)
-    ]);
 
-    dir_label.set_text(&config.path);
+    set_path(&app, &config.path);
 
+    update_version_list(&app, &config.version);
     {
-        let mut version_list = nwg_get_mut!(app; [
+        let version_list = nwg_get_mut!(app; [
             (Id::VersionList, nwg::ListBox<String>)
         ]);
 
-        let version_collection = version_list.collection_mut();
-        version_collection.clear();
-        config.version.iter().for_each(|x| version_collection.push(String::from(x)));
-        version_collection.sort();
-        version_list.sync();
+        match version_list.collection().iter().position(|x| x == &config.last_selected) {
+            Some(idx) => {
+                version_list.set_selected_index(idx);
+            }
+            None => ()
+        }
     }
 
     let main_window = nwg_get_mut!(app; [
         (Id::MainWindow, nwg::Window)
     ]);
-
-    // update ui value (needs scoping to release reference)
-    {
-        let mut ui_path = nwg_get_mut!(app; [(Id::Path, String)]);
-        **ui_path = config.path.clone();
-    }
 
     // show window and do message loop
     dbg!(&config.last_selected);
@@ -332,17 +361,23 @@ fn run(config: &mut Config) {
     dispatch_events();
 
     // update config
-    let (version_list, remember_checkbox) = nwg_get!(app; [
+    let (version_list, remember_checkbox, ui_path) = nwg_get!(app; [
         (Id::VersionList, nwg::ListBox<String>),
-        (Id::RememberCheckBox, nwg::CheckBox)
+        (Id::RememberCheckBox, nwg::CheckBox),
+        (Id::Path, String)
     ]);
 
     match version_list.get_selected_index() {
         Some(idx) => {
             config.last_selected = version_list.collection()[idx].clone();
         }
-        None => ()
+        None => {
+            config.last_selected.clear();
+        }
     }
 
+    config.version.clear();
+    version_list.collection().iter().for_each(|x| {config.version.insert(x.clone()); });
+    config.path = *ui_path.clone();
     config.remember = remember_checkbox.get_checkstate() == nwg::constants::CheckState::Checked;
 }
