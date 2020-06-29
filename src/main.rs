@@ -143,7 +143,7 @@ nwg_template!(
                 parent=Id::MainWindow;
                 position=(APP_MARGIN as i32, (APP_HEIGHT * 9 / 10) as i32);
                 size=(APP_WIDTH, APP_HEIGHT / 20);
-                text="Remember selection";
+                text="Remember selection and don't ask in the future";
                 font=Some(Id::Font)
             )
         ),
