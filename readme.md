@@ -18,3 +18,4 @@ This utility let you easily switch between versions when multiple versions are i
     1. Choose Bitwig icon and apply.
 
 ## Usage
+1. 
