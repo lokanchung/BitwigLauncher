@@ -1,22 +1,28 @@
+// #![windows_subsystem = "windows"]
+
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use serde::{Serialize, Deserialize};
 
 type AnyError = Box<dyn std::error::Error>;
+
+// ---- CONFIG ----
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Config {
     path: String,
     version: HashSet<String>,
-    show: bool
+    last_selected: String,
+    remember: bool
 }
 
 impl Config {
     fn new() -> Config {
         return Config { 
-            path: String::new(),
+            path: String::from("C:\\Program Files\\Bitwig Studio"),
             version: HashSet::new(),
-            show: true,
+            last_selected: String::new(),
+            remember: false,
         }
     }
 }
@@ -30,7 +36,6 @@ fn write_config(config:&Config, config_path:& Path) -> Result<(), AnyError> {
     let config_str = serde_yaml::to_string(&config).unwrap();
     key.set_value("config", &config_str)?;
 
-    println!("reg write");
     Ok(())
 }
 
@@ -43,14 +48,137 @@ fn read_config(config_path: &Path) -> Result<Config, AnyError> {
 
     let config_str: String = key.get_value("config")?;
 
-    println!("reg read");
     Ok(serde_yaml::from_str(&config_str)?)
 }
 
-fn main() -> Result<(), AnyError> {
-    let config_path = Path::new("Software\\Bitwiglauncher");
+// ---- APP ----
+#[macro_use] extern crate native_windows_gui as nwg;
+use nwg::{Event, EventArgs, Ui, simple_message, fatal_message, dispatch_events};
+#[derive(Debug, Clone, Hash)]
+pub enum Id {
+    // Controls
+    MainWindow,
+    VersionList,
+    BitwigLabel,
+    BitwigDirLabel,
+    LaunchButton,
+    ChangeDirButton,
+    ChangeDirDialog,
+    RememberCheckBox,
 
+    // Events
+    Launch,
+
+    // Resource,
+    Font,
+
+    // Values
+    Path,
+}
+
+const APP_WIDTH: u32 = 280;
+const APP_HEIGHT: u32 = 360;
+const APP_MARGIN: u32 = 10;
+
+nwg_template!(
+    head: setup_ui<Id>,
+    controls: [
+        (Id::MainWindow, 
+            nwg_window!( 
+                title="Bitwig Launcher"; 
+                size=(APP_WIDTH, APP_HEIGHT); 
+                position=(nwg::constants::CENTER_POSITION, nwg::constants::CENTER_POSITION);
+                visible=false
+            )
+        ),
+        (Id::LaunchButton, 
+            nwg_button!(
+                parent=Id::MainWindow; 
+                text="Launch"; 
+                position=((APP_WIDTH * 3 / 5 + APP_MARGIN * 2) as i32, (APP_MARGIN * 2 + APP_HEIGHT / 10) as i32); 
+                size=(APP_WIDTH * 2 / 5 - APP_MARGIN * 3, APP_HEIGHT / 10);
+                font=Some(Id::Font)
+            )
+        ),
+        (Id::ChangeDirButton, 
+            nwg_button!(
+                parent=Id::MainWindow; 
+                text="..."; 
+                position=((APP_WIDTH * 8 / 10 + APP_MARGIN * 2) as i32, (APP_MARGIN + APP_HEIGHT / 20) as i32); 
+                size=(APP_WIDTH * 2 / 10 - APP_MARGIN * 3, APP_HEIGHT / 20);
+                font=Some(Id::Font)
+            )
+        ),
+        (Id::BitwigLabel,
+            nwg_label!(
+                parent=Id::MainWindow;
+                text="Bitwig Location: ";
+                position=(APP_MARGIN as i32, APP_MARGIN as i32);
+                size=(APP_WIDTH, APP_HEIGHT / 20);
+                font=Some(Id::Font)
+            )
+        ),
+        (Id::BitwigDirLabel,
+            nwg_label!(
+                parent=Id::MainWindow;
+                text="........";
+                position=(APP_MARGIN as i32, (APP_MARGIN + APP_HEIGHT / 20)  as i32);
+                size=(APP_WIDTH, APP_HEIGHT / 20);
+                font=Some(Id::Font)
+            )
+        ),
+        (Id::VersionList,
+            nwg_listbox!(
+                parent=Id::MainWindow;
+                position=(APP_MARGIN as i32, (APP_MARGIN * 2 + APP_HEIGHT / 10) as i32); 
+                size=(APP_WIDTH * 3 / 5, APP_HEIGHT * 7 / 10);
+                collection=Vec::<String>::new();
+                font=Some(Id::Font)
+            )
+        ),
+        (Id::RememberCheckBox,
+            nwg_checkbox!(
+                parent=Id::MainWindow;
+                position=(APP_MARGIN as i32, (APP_HEIGHT * 9 / 10) as i32);
+                size=(APP_WIDTH, APP_HEIGHT / 20);
+                text="Remember selection";
+                font=Some(Id::Font)
+            )
+        ),
+        (Id::ChangeDirDialog,
+            nwg_filedialog!(
+                action=nwg::constants::FileDialogAction::OpenDirectory; 
+                title="Bitwig Path..."
+            )
+        )
+    ];
+    events: [
+        (Id::LaunchButton, Id::Launch, Event::Click, |ui,_,_,_| {
+            let (path, version_list) = &nwg_get!(ui; [
+                (Id::Path, String), (Id::VersionList, nwg::ListBox<String>)
+            ]);
+            
+            match version_list.get_selected_index() {
+                Some(idx) => {
+                    let version = &version_list.collection()[idx];
+                    launch_bitwig(path, version);
+                    nwg::exit();
+                }
+                None => ()
+            }
+        })
+    ];
+    resources: [
+        (Id::Font, nwg_font!(family="Segoe UI"; size=17))
+    ];
+    values: [
+        (Id::Path, String::new())
+    ]
+);
+
+fn main() -> Result<(), AnyError> {
     // load config
+    let config_path = Path::new("Software\\Bitwiglauncher");
     let mut reset_count = 0;
     let mut config: Config;
     loop {
@@ -72,16 +200,16 @@ fn main() -> Result<(), AnyError> {
         break;
     }
 
+    // run and update config
     run(&mut config);
     write_config(&config, &config_path)?;
     Ok(())
 }
 
-fn run(config: &mut Config) {
-    // collect all available versions
+fn get_versions(path:&str) -> HashSet<String> {
     let mut versions: HashSet<String> = HashSet::new();
 
-    if let Ok(paths) = std::fs::read_dir(&config.path) {
+    if let Ok(paths) = std::fs::read_dir(path) {
         for path in paths {
             let mut buf = path.unwrap().path();
             let p = buf.as_path();
@@ -97,17 +225,124 @@ fn run(config: &mut Config) {
                 }
             }
         }
-        
-        // when no version is found prompt path selection
-        if versions.len() == 0 {
+    }
 
-        }
+    return versions;
+}
+
+fn change_dir(app: &Ui<Id>) -> Option<String> {
+    let dialog = nwg_get_mut!(app; [
+        (Id::ChangeDirDialog, nwg::FileDialog)
+    ]);
+
+    if dialog.run() {
+        Some(dialog.get_selected_item().unwrap())
     } else {
-        // TODO: show folder picker
+        None
+    }
+}
+
+fn launch_bitwig(path:&str, version:&str) -> Result<(), AnyError> {
+    use std::process::Command;
+
+    let bitwig_path = PathBuf::from(path)
+        .join(version).join("Bitwig Studio.exe");
+
+    Command::new(bitwig_path).spawn()?;
+    Ok(())
+}
+
+fn run(config: &mut Config) {
+    // create gui
+    let app: Ui<Id>;
+    match Ui::new() {
+        Ok(_app) => { app = _app; },
+        Err(e) => { fatal_message("Fatal Error", &format!("{:?}", e) ); }
     }
 
-    // detect difference
-    if config.version == versions {
-        dbg!(true);
+    if let Err(e) = setup_ui(&app) {
+        fatal_message("Fatal Error", &format!("{:?}", e));
     }
+
+    // collect all available versions
+    let versions = get_versions(&config.path);
+    // when no version is found prompt path selection
+    if versions.len() == 0 {
+        if let Some(new_path) = change_dir(&app) {
+            config.path = new_path;
+        }
+    }
+
+    // detect difference uncheck remember
+    if config.version != versions {
+        config.remember = false;
+    }
+    
+    // if only one version available, launch it.
+    if versions.len() == 1 {
+        let ver = &versions.iter().next().unwrap();
+        match launch_bitwig(&config.path, ver) {
+            Ok(_) => { return; }
+            _ => ()
+        }
+    }
+
+    config.version = versions;
+
+    if config.remember {
+        match launch_bitwig(&config.path, &config.last_selected) {
+            Ok(_) => { return; }
+            _ => ()
+        }
+    }
+    
+    // setup lables
+    let dir_label = nwg_get_mut!(app; [
+        (Id::BitwigDirLabel, nwg::Label)
+    ]);
+
+    dir_label.set_text(&config.path);
+
+    {
+        let mut version_list = nwg_get_mut!(app; [
+            (Id::VersionList, nwg::ListBox<String>)
+        ]);
+
+        let version_collection = version_list.collection_mut();
+        version_collection.clear();
+        config.version.iter().for_each(|x| version_collection.push(String::from(x)));
+        version_collection.sort();
+        version_list.sync();
+    }
+
+    let main_window = nwg_get_mut!(app; [
+        (Id::MainWindow, nwg::Window)
+    ]);
+
+    // update ui value (needs scoping to release reference)
+    {
+        let mut ui_path = nwg_get_mut!(app; [(Id::Path, String)]);
+        **ui_path = config.path.clone();
+    }
+
+    // show window and do message loop
+    dbg!(&config.last_selected);
+
+    main_window.set_visibility(true);
+    dispatch_events();
+
+    // update config
+    let (version_list, remember_checkbox) = nwg_get!(app; [
+        (Id::VersionList, nwg::ListBox<String>),
+        (Id::RememberCheckBox, nwg::CheckBox)
+    ]);
+
+    match version_list.get_selected_index() {
+        Some(idx) => {
+            config.last_selected = version_list.collection()[idx].clone();
+        }
+        None => ()
+    }
+
+    config.remember = remember_checkbox.get_checkstate() == nwg::constants::CheckState::Checked;
 }
