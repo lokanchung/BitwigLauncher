@@ -4,6 +4,20 @@ Since version 3.2, Bitwig introduced new installer which allows different versio
 This utility let you easily switch between versions when multiple versions are installed. 
 
 ---
+## Requirements
+* Windows 10 64bit
+* This utility depends on directory structure and file names so all Bitwig versions must be neatly installed in one parent folder. <br>
+    <b>Good:</b>
+    <pre>...\(A Bitwig Directory)
+                            \3.2
+                            \3.2.1
+                            \3.2.2</pre>
+    <b>Bad:</b>
+    <pre>...\(A Bitwig Directory)
+                            \3.2 <br>...\(B Bitwig directory)                   
+                            \3.2.1
+                            \3.2.2</pre>
+
 ## Installation
 1. Download Binary from released 
 1. Place it in any folder you want.
@@ -18,4 +32,9 @@ This utility let you easily switch between versions when multiple versions are i
     1. Choose Bitwig icon and apply.
 
 ## Usage
-1. 
+1. If the program couldn't find Bitwig in the default installation path, you will be prompted to choose a folder. <b>Choose a parent folder containing all different versions.</b>
+2. <b>If only one version is detected it will automatically launch.</b>
+3. "Remember and don't ask in the future" will remember your choice untill you install or uninstall different Bitwig versions.
+
+## Troubleshooting
+### Show the launcher window after "Remember and don't ask in the future"
