@@ -251,7 +251,7 @@ fn main() -> Result<(), AnyError> {
         break;
     }
     if reset_config {
-        config = Config::new();
+        config.remember = false;
     }
 
     // run and update config
