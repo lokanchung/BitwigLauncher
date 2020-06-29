@@ -5,6 +5,8 @@ This utility let you easily switch between versions when multiple versions are i
 
 Note that this isn't much tested and could be buggy. If you find any bug, please file an issue.
 
+![](https://i.imgur.com/Os652gM.png)
+
 ---
 ## Requirements
 * Windows 10 64bit
