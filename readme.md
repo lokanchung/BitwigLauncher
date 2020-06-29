@@ -3,6 +3,8 @@ Since version 3.2, Bitwig introduced new installer which allows different versio
 
 This utility let you easily switch between versions when multiple versions are installed. 
 
+Note that this isn't much tested and could be buggy. If you find any bug, please file an issue.
+
 ---
 ## Requirements
 * Windows 10 64bit
@@ -19,7 +21,7 @@ This utility let you easily switch between versions when multiple versions are i
                             \3.2.2</pre>
 
 ## Installation
-1. Download Binary from released 
+1. Download the binary: [Link](https://github.com/lokanchung/BitwigLauncher/releases/)
 1. Place it in any folder you want.
 1. Create Shortcut.
 1. <a name="Installation41"></a>Change Icon (Optional)
