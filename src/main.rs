@@ -53,7 +53,7 @@ fn read_config(config_path: &Path) -> Result<Config, AnyError> {
 
 // ---- APP ----
 #[macro_use] extern crate native_windows_gui as nwg;
-use nwg::{Event, Ui, simple_message, fatal_message, dispatch_events};
+use nwg::{Event, EventArgs, Ui, fatal_message, dispatch_events};
 #[derive(Debug, Clone, Hash)]
 pub enum Id {
     // Controls
@@ -69,6 +69,7 @@ pub enum Id {
     // Events
     Launch,
     ChangeDir,
+    Keyboard,
 
     // Resource,
     Font,
@@ -154,7 +155,7 @@ nwg_template!(
         )
     ];
     events: [
-        (Id::LaunchButton, Id::Launch, Event::Click, |ui,_,_,_| {
+        (Id::LaunchButton, Id::Launch, Event::Click, |ui, _, _, _| {
             let (path, version_list) = &nwg_get!(ui; [
                 (Id::Path, String), (Id::VersionList, nwg::ListBox<String>)
             ]);
@@ -172,10 +173,44 @@ nwg_template!(
                 None => ()
             }
         }),
-        (Id::ChangeDirButton, Id::ChangeDir, Event::Click, |ui,_,_,_| {
+        (Id::ChangeDirButton, Id::ChangeDir, Event::Click, |ui, _, _, _| {
             change_dir(ui);
             let versions = get_versions(&nwg_get!(ui; [(Id::Path, String)]));
             update_version_list(ui, versions);
+        }),
+        (Id::MainWindow, Id::Keyboard, Event::KeyUp, |ui, _, _, e| {
+            match e {
+                EventArgs::Key(0x0D) => { //enter
+                    ui.trigger(&Id::LaunchButton, Event::Click, EventArgs::None);
+                }
+                _ => ()
+            }
+        }),
+        (Id::MainWindow, Id::Keyboard, Event::KeyDown, |ui, _, _, e| {
+            let version_list = nwg_get_mut!(ui; [(Id::VersionList, nwg::ListBox<String>)]);
+            match e {
+                EventArgs::Key(0x26) => { // up
+                    match version_list.get_selected_index() {
+                        Some(idx) => {
+                            if idx > 0 {
+                                version_list.set_selected_index(idx - 1);
+                            }
+                        }
+                        _ => ()
+                    }
+                }
+                EventArgs::Key(0x28) => { // down
+                    match version_list.get_selected_index() {
+                        Some(idx) => {
+                            if idx + 1 < version_list.len() {
+                                version_list.set_selected_index(idx + 1);
+                            }
+                        }
+                        _ => ()
+                    }
+                }
+                _ => ()
+            }
         })
     ];
     resources: [
