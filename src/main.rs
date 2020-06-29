@@ -1,4 +1,4 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -187,10 +187,16 @@ nwg_template!(
 );
 
 fn main() -> Result<(), AnyError> {
+    let args: Vec<String> = std::env::args().collect();
+    let reset_config = match args.get(1) {
+        Some(arg) => arg == "--reset",
+        _ => false
+    };
+
     // load config
     let config_path = Path::new("Software\\Bitwiglauncher");
     let mut reset_count = 0;
-    let mut config: Config;
+    let mut config: Config; // ???
     loop {
         match read_config(config_path) {
             Ok(c) => {
@@ -208,6 +214,9 @@ fn main() -> Result<(), AnyError> {
             }
         }
         break;
+    }
+    if reset_config {
+        config = Config::new();
     }
 
     // run and update config
@@ -303,11 +312,12 @@ fn run(config: &mut Config) {
     }
 
     // collect all available versions
-    let versions = get_versions(&config.path);
+    let mut versions = get_versions(&config.path);
     // when no version is found prompt path selection
     if versions.len() == 0 {
         if let Some(new_path) = change_dir(&app) {
             config.path = new_path;
+            versions = get_versions(&config.path);
         }
     }
 
@@ -327,14 +337,14 @@ fn run(config: &mut Config) {
 
     config.version = versions;
 
+    set_path(&app, &config.path);
+
     if config.remember {
         match launch_bitwig(&config.path, &config.last_selected) {
             Ok(_) => { return; }
             _ => ()
         }
     }
-
-    set_path(&app, &config.path);
 
     update_version_list(&app, &config.version);
     {
